@@ -278,6 +278,7 @@ function countryBadgeColor(country: 'Australia' | 'Canada') {
 export default function ScenicArticlesScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const { width: W, height: H } = useWindowDimensions();
+
   const isSmall = H <= 740 || W <= 370;
   const isTiny = H <= 690 || W <= 350;
 
@@ -289,6 +290,8 @@ export default function ScenicArticlesScreen({ navigation }: any) {
 
   const btnH = isTiny ? 40 : isSmall ? 44 : 48;
   const btnR = isTiny ? 14 : isSmall ? 16 : 18;
+
+  const modalMaxH = isTiny ? Math.min(360, H * 0.55) : isSmall ? Math.min(430, H * 0.62) : Math.min(520, H * 0.68);
 
   const [active, setActive] = useState<PlaceArticle | null>(null);
 
@@ -306,7 +309,9 @@ export default function ScenicArticlesScreen({ navigation }: any) {
   }, [active]);
 
   const headerTop = Math.max(8, insets.top ? 6 : 8);
-  const listBottomPad = Math.max(16, insets.bottom + (isTiny ? 14 : 18));
+
+  const EXTRA_SCROLL = 120;
+  const listBottomPad = Math.max(16, insets.bottom + (isTiny ? 14 : 18) + EXTRA_SCROLL);
 
   const intro = useMemo(
     () =>
@@ -325,22 +330,29 @@ export default function ScenicArticlesScreen({ navigation }: any) {
           <View style={{ width: 40 }} />
         </View>
 
-        <View style={{ paddingHorizontal: padH, paddingTop: 10, paddingBottom: 8 }}>
-          <Text style={[styles.pageTitle, { fontSize: isTiny ? 18 : isSmall ? 20 : 24 }]}>
-            Dragon Scenic Atlas
-          </Text>
+        <View style={{ paddingHorizontal: padH, paddingTop: isTiny ? 6 : 10, paddingBottom: isTiny ? 6 : 8 }}>
+          <Text style={[styles.pageTitle, { fontSize: isTiny ? 18 : isSmall ? 20 : 24 }]}>Dragon Scenic Atlas</Text>
           <Text
             style={[
               styles.pageSub,
               { fontSize: isTiny ? 11.5 : isSmall ? 12.5 : 13.5, lineHeight: isTiny ? 16 : 19 },
             ]}
+            numberOfLines={isTiny ? 2 : 3}
           >
             {intro}
           </Text>
         </View>
 
         <ScrollView
-          contentContainerStyle={{ paddingHorizontal: padH, paddingBottom: listBottomPad }}
+          style={{ flex: 1 }}
+          contentContainerStyle={{
+            paddingHorizontal: padH,
+            paddingBottom: listBottomPad,
+            flexGrow: 1,
+          }}
+          bounces
+          alwaysBounceVertical
+          overScrollMode="always"
           showsVerticalScrollIndicator={false}
         >
           {ARTICLES.map(item => (
@@ -361,9 +373,7 @@ export default function ScenicArticlesScreen({ navigation }: any) {
                 <Text style={styles.coordsText}>{item.coords}</Text>
               </View>
 
-              <Text style={[styles.cardTitle, { fontSize: isTiny ? 15 : isSmall ? 16 : 18 }]}>
-                {item.title}
-              </Text>
+              <Text style={[styles.cardTitle, { fontSize: isTiny ? 15 : isSmall ? 16 : 18 }]}>{item.title}</Text>
               <Text style={[styles.cardMeta, { fontSize: isTiny ? 11 : 11.5 }]}>{item.region}</Text>
 
               <Text
@@ -371,16 +381,16 @@ export default function ScenicArticlesScreen({ navigation }: any) {
                   styles.cardTeaser,
                   { fontSize: isTiny ? 12 : isSmall ? 12.5 : 13.5, lineHeight: isTiny ? 17 : 20 },
                 ]}
-                numberOfLines={3}
+                numberOfLines={isTiny ? 2 : 3}
               >
                 {item.teaser}
               </Text>
 
-              <View style={{ height: 12 }} />
+              <View style={{ height: isTiny ? 10 : 12 }} />
 
               <View style={styles.cardBtnRow}>
                 <Pressable
-                  style={[styles.readBtn, { height: btnH, borderRadius: btnR, minWidth: isTiny ? 120 : 140 }]}
+                  style={[styles.readBtn, { height: btnH, borderRadius: btnR, minWidth: isTiny ? 110 : 140 }]}
                   onPress={() => setActive(item)}
                 >
                   <Text style={styles.readBtnText}>READ</Text>
@@ -415,6 +425,7 @@ export default function ScenicArticlesScreen({ navigation }: any) {
                     width: Math.min(460, W - padH * 2),
                     borderRadius: isTiny ? 20 : isSmall ? 22 : 26,
                     padding: isTiny ? 14 : isSmall ? 16 : 20,
+                    maxHeight: Math.min(H - (insets.top + insets.bottom + 40), isTiny ? 520 : 640),
                   },
                 ]}
               >
@@ -437,15 +448,23 @@ export default function ScenicArticlesScreen({ navigation }: any) {
                   </Pressable>
                 </View>
 
-                <Text style={[styles.modalTitle, { fontSize: isTiny ? 18 : isSmall ? 20 : 22 }]}>
+                <Text style={[styles.modalTitle, { fontSize: isTiny ? 18 : isSmall ? 20 : 22 }]} numberOfLines={2}>
                   {active?.title}
                 </Text>
-                <Text style={styles.modalMeta}>{active?.region}</Text>
-                <Text style={styles.modalCoords}>Coordinates: {active?.coords}</Text>
+                <Text style={styles.modalMeta} numberOfLines={2}>
+                  {active?.region}
+                </Text>
+                <Text style={styles.modalCoords} numberOfLines={2}>
+                  Coordinates: {active?.coords}
+                </Text>
 
                 <View style={{ height: 10 }} />
 
-                <ScrollView style={{ maxHeight: isTiny ? 320 : isSmall ? 380 : 460 }} showsVerticalScrollIndicator={false}>
+                <ScrollView
+                  style={{ maxHeight: modalMaxH }}
+                  contentContainerStyle={{ paddingBottom: 8 }}
+                  showsVerticalScrollIndicator={false}
+                >
                   <Text style={[styles.modalBody, { fontSize: isTiny ? 12.5 : 13.5, lineHeight: isTiny ? 18 : 20 }]}>
                     {active?.body}
                   </Text>
@@ -459,8 +478,6 @@ export default function ScenicArticlesScreen({ navigation }: any) {
                       • {f}
                     </Text>
                   ))}
-
-                  <View style={{ height: 10 }} />
                 </ScrollView>
 
                 <View style={{ height: 12 }} />
@@ -520,18 +537,11 @@ const styles = StyleSheet.create({
   pageTitle: { color: '#fff', fontWeight: '900', textAlign: 'left' },
   pageSub: { color: 'rgba(255,255,255,0.84)', fontWeight: '700' },
 
-  // ✅ СДЕЛАЛИ КАРТОЧКИ ТЕМНЕЕ (в стиле красно-бордовой апки)
   card: {
-    // Было: rgba(0,0,0,0.16)
     backgroundColor: 'rgba(18, 0, 0, 0.58)',
-
-    // Чуть “теплее” и плотнее рамка, чтобы карточка читалась поверх яркого фона
     borderWidth: 1,
     borderColor: 'rgba(255, 180, 94, 0.18)',
-
     marginBottom: 12,
-
-    // Тень для отделения от фона
     shadowColor: '#000',
     shadowOpacity: 0.35,
     shadowRadius: 14,
@@ -558,7 +568,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
   },
 
-  // Чуть ярче координаты (на тёмной карточке будет лучше)
   coordsText: {
     color: 'rgba(255,255,255,0.78)',
     fontWeight: '900',
@@ -566,11 +575,7 @@ const styles = StyleSheet.create({
   },
 
   cardTitle: { color: '#fff', fontWeight: '900', marginTop: 10 },
-
-  // Чуть повысили контраст меты
   cardMeta: { color: 'rgba(255,255,255,0.80)', fontWeight: '800', marginTop: 3 },
-
-  // Тизер чуть ярче для читабельности на фоне
   cardTeaser: { color: 'rgba(255,255,255,0.90)', fontWeight: '700', marginTop: 10 },
 
   cardBtnRow: { flexDirection: 'row', gap: 10 },
@@ -583,7 +588,6 @@ const styles = StyleSheet.create({
   readBtnText: { color: '#0b0b0b', fontWeight: '900', letterSpacing: 0.4, fontSize: 13.5 },
 
   ghostBtn: {
-    // Тоже чуть темнее, чтобы выглядело цельно с карточкой
     backgroundColor: 'rgba(0,0,0,0.30)',
     borderWidth: 2,
     borderColor: '#FFB45E',

@@ -14,7 +14,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const BG = require('../assets/background.png');
-const BG2 = require('../assets/background2.png');
+const BG2 = require('../assets/background.png');
 const ICON_BACK = require('../assets/back.png');
 
 type ChoiceId = 'A' | 'B' | 'C';
