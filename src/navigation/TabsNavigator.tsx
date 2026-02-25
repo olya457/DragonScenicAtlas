@@ -3,7 +3,7 @@ import { View, Image, Pressable, StyleSheet, Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import type { TabsParamList } from './types';
 
-import HomeScreen from '../screens/HomeScreen';
+import HomeScreen from '../screens/HomesScreen';
 import PlacesListScreen from '../screens/PlacesListScreen';
 import QuizScreen from '../screens/QuizScreen';
 import SavedPlacesScreen from '../screens/SavedPlacesScreen';

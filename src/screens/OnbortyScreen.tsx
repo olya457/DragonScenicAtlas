@@ -38,7 +38,7 @@ export default function OnboardScreen({ navigation }: Props) {
       {
         key: '1',
         image: IMG_1,
-        text: 'I am Mei Lin.\nI have watched these lands\nlong before maps had names.',
+        text: 'I am Aruna.\nI have watched these lands\nlong before maps had names.',
         action: 'next',
       },
       {
@@ -66,8 +66,6 @@ export default function OnboardScreen({ navigation }: Props) {
 
   const [index, setIndex] = useState(0);
 
-  const topBlockH = isSmall ? Math.min(H * 0.46, 330) : Math.min(H * 0.52, 420);
-  const topOffset = 20;
   const bottomMargin = 30 + 80;
   const sidePad = isSmall ? 14 : 18;
   const cardRadius = isSmall ? 16 : 18;
@@ -87,12 +85,10 @@ export default function OnboardScreen({ navigation }: Props) {
 
   const onPrimary = () => {
     const slide = slides[index];
-
     if (slide.action === 'start') {
       navigation.replace('Tabs');
       return;
     }
-
     const next = Math.min(index + 1, slides.length - 1);
     goTo(next);
   };
@@ -108,42 +104,50 @@ export default function OnboardScreen({ navigation }: Props) {
           pagingEnabled
           scrollEnabled={false}
           showsHorizontalScrollIndicator={false}
-          renderItem={({ item }) => (
-            <View style={[styles.page, { width: W }]}>
-              <View style={[styles.top, { height: topBlockH, paddingTop: topOffset }]}>
-                <Image source={item.image} style={styles.topImage} resizeMode="contain" />
-              </View>
+          renderItem={({ item }) => {
+            const isFirst = item.key === '1';
 
-              <View
-                style={[
-                  styles.bottomCard,
-                  {
-                    marginBottom: bottomMargin,
-                    marginLeft: sidePad,
-                    marginRight: sidePad,
-                    borderRadius: cardRadius,
-                    paddingTop: cardPadTop,
-                    paddingBottom: cardPadBottom,
-                    paddingHorizontal: sidePad,
-                  },
-                ]}
-              >
-                <Text style={[styles.bottomText, { fontSize: textSize, lineHeight: lineH }]}>
-                  {item.text}
-                </Text>
+            return (
+              <View style={[styles.page, { width: W }]}>
+                <View style={[styles.top, isFirst && styles.topFirst]}>
+                  <Image
+                    source={item.image}
+                    resizeMode="contain"
+                    style={[styles.topImage, isFirst ? styles.topImageFirstSmall : null]}
+                  />
+                </View>
 
-                <Pressable
+                <View
                   style={[
-                    styles.roundBtn,
-                    { width: btnSize, height: btnSize, borderRadius: btnRadius },
+                    styles.bottomCard,
+                    {
+                      marginBottom: bottomMargin,
+                      marginLeft: sidePad,
+                      marginRight: sidePad,
+                      borderRadius: cardRadius,
+                      paddingTop: cardPadTop,
+                      paddingBottom: cardPadBottom,
+                      paddingHorizontal: sidePad,
+                    },
                   ]}
-                  onPress={onPrimary}
                 >
-                  <Text style={[styles.roundBtnIcon, { fontSize: btnIconSize }]}>›</Text>
-                </Pressable>
+                  <Text style={[styles.bottomText, { fontSize: textSize, lineHeight: lineH }]}>
+                    {item.text}
+                  </Text>
+
+                  <Pressable
+                    style={[
+                      styles.roundBtn,
+                      { width: btnSize, height: btnSize, borderRadius: btnRadius },
+                    ]}
+                    onPress={onPrimary}
+                  >
+                    <Text style={[styles.roundBtnIcon, { fontSize: btnIconSize }]}>›</Text>
+                  </Pressable>
+                </View>
               </View>
-            </View>
-          )}
+            );
+          }}
         />
 
         <View
@@ -170,17 +174,27 @@ const styles = StyleSheet.create({
 
   page: {
     flex: 1,
-    justifyContent: 'space-between',
   },
 
   top: {
-    justifyContent: 'center',
+    flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+
+  topFirst: {
+    justifyContent: 'flex-end',
   },
 
   topImage: {
-    width: '92%',
-    height: '92%',
+    width: '82%',
+    height: '82%',
+  },
+
+  topImageFirstSmall: {
+    width: '64%',
+    height: '70%',
   },
 
   bottomCard: {

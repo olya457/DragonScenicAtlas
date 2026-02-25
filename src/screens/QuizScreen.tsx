@@ -12,22 +12,18 @@ import {
   Easing,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useFocusEffect } from '@react-navigation/native';
 
 const BG = require('../assets/background.png');
 const BG2 = require('../assets/background2.png');
 const ICON_BACK = require('../assets/back.png');
 
-type Choice = { id: 'A' | 'B' | 'C'; text: string };
-type Question = { id: string; text: string; choices: Choice[]; correct: Choice['id'] };
+type ChoiceId = 'A' | 'B' | 'C';
+type Choice = { id: ChoiceId; text: string };
+type Question = { id: string; text: string; choices: Choice[]; correct: ChoiceId };
+type Phase = 'intro' | 'question' | 'result';
 
-const LEVELS_TOTAL = 10;
-const QUESTIONS_PER_LEVEL = 10;
+const QUESTIONS_PER_ROUND = 10;
 const PASS_THRESHOLD = 7;
-
-const STORAGE_BEST = 'quiz_best_v2';
-const STORAGE_LEVEL = 'quiz_level_v2';
 
 const QUESTION_BANK: Question[] = [
   {
@@ -241,10 +237,8 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 function pickQuestions(bank: Question[]): Question[] {
-  return shuffle(bank).slice(0, QUESTIONS_PER_LEVEL);
+  return shuffle(bank).slice(0, QUESTIONS_PER_ROUND);
 }
-
-type Phase = 'intro' | 'question' | 'result';
 
 export default function QuizScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
@@ -253,21 +247,38 @@ export default function QuizScreen({ navigation }: any) {
   const isTiny = H <= 690 || W <= 350;
 
   const [phase, setPhase] = useState<Phase>('intro');
-  const [level, setLevel] = useState(1);
-  const [best, setBest] = useState(1);
-
   const [questions, setQuestions] = useState<Question[]>([]);
   const [idx, setIdx] = useState(0);
   const [score, setScore] = useState(0);
-
   const [locked, setLocked] = useState(false);
-  const [selected, setSelected] = useState<Choice['id'] | null>(null);
+  const [selected, setSelected] = useState<ChoiceId | null>(null);
 
   const tRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const appearQ = useRef(new Animated.Value(0)).current;
   const appearA = useRef(new Animated.Value(0)).current;
 
   const current = questions[idx];
+  const passed = score >= PASS_THRESHOLD;
+
+  const padH = isTiny ? 16 : isSmall ? 18 : 22;
+  const topTitleSize = isTiny ? 12.5 : isSmall ? 13 : 14;
+
+  const qTextSize = isTiny ? 14 : isSmall ? 15 : 17;
+  const qLine = isTiny ? 20 : isSmall ? 22 : 26;
+
+  const btnH = isTiny ? 46 : isSmall ? 50 : 56;
+  const btnR = isTiny ? 18 : isSmall ? 20 : 24;
+
+  const mainMinW = isTiny ? 220 : isSmall ? 240 : 260;
+
+  const progress = useMemo(() => `${idx + 1}/${QUESTIONS_PER_ROUND}`, [idx]);
+
+  useEffect(() => {
+    return () => {
+      if (tRef.current) clearTimeout(tRef.current);
+      tRef.current = null;
+    };
+  }, []);
 
   const runQuestionAnim = useCallback(() => {
     appearQ.setValue(0);
@@ -289,54 +300,38 @@ export default function QuizScreen({ navigation }: any) {
     ]).start();
   }, [appearA, appearQ]);
 
-  useFocusEffect(
-    useCallback(() => {
-      (async () => {
-        const rawLevel = await AsyncStorage.getItem(STORAGE_LEVEL);
-        const rawBest = await AsyncStorage.getItem(STORAGE_BEST);
+  const resetAll = useCallback(() => {
+    if (tRef.current) clearTimeout(tRef.current);
+    tRef.current = null;
 
-        const lv = rawLevel ? Number(rawLevel) : 1;
-        const bs = rawBest ? Number(rawBest) : 1;
+    setPhase('intro');
+    setQuestions([]);
+    setIdx(0);
+    setScore(0);
+    setSelected(null);
+    setLocked(false);
 
-        setLevel(isFinite(lv) && lv >= 1 ? Math.min(lv, LEVELS_TOTAL) : 1);
-        setBest(isFinite(bs) && bs >= 1 ? Math.min(bs, LEVELS_TOTAL) : 1);
-      })();
+    appearQ.setValue(0);
+    appearA.setValue(0);
+  }, [appearA, appearQ]);
 
-      return () => {
-        if (tRef.current) clearTimeout(tRef.current);
-        tRef.current = null;
+  useEffect(() => {
+    const unsub = navigation?.addListener?.('blur', resetAll);
+    return unsub;
+  }, [navigation, resetAll]);
 
-        setPhase('intro');
-        setQuestions([]);
-        setIdx(0);
-        setScore(0);
-        setSelected(null);
-        setLocked(false);
-        appearQ.setValue(0);
-        appearA.setValue(0);
-      };
-    }, [appearA, appearQ])
-  );
+  const startRound = useCallback(() => {
+    if (tRef.current) clearTimeout(tRef.current);
 
-  const startLevel = useCallback(
-    async (lv: number) => {
-      if (tRef.current) clearTimeout(tRef.current);
+    setQuestions(pickQuestions(QUESTION_BANK));
+    setIdx(0);
+    setScore(0);
+    setSelected(null);
+    setLocked(false);
+    setPhase('question');
 
-      const safeLv = Math.max(1, Math.min(lv, LEVELS_TOTAL));
-      setLevel(safeLv);
-
-      setQuestions(pickQuestions(QUESTION_BANK));
-      setIdx(0);
-      setScore(0);
-      setSelected(null);
-      setLocked(false);
-      setPhase('question');
-
-      await AsyncStorage.setItem(STORAGE_LEVEL, String(safeLv));
-      requestAnimationFrame(() => runQuestionAnim());
-    },
-    [runQuestionAnim]
-  );
+    requestAnimationFrame(() => runQuestionAnim());
+  }, [runQuestionAnim]);
 
   const toMenu = useCallback(() => {
     if (tRef.current) clearTimeout(tRef.current);
@@ -346,22 +341,19 @@ export default function QuizScreen({ navigation }: any) {
     setLocked(false);
   }, []);
 
-  const passed = score >= PASS_THRESHOLD;
-
   const onChoose = useCallback(
-    (choiceId: Choice['id']) => {
+    (choiceId: ChoiceId) => {
       if (!current) return;
       if (locked) return;
 
       setLocked(true);
       setSelected(choiceId);
 
-      const correct = current.correct === choiceId;
-      if (correct) setScore(s => s + 1);
+      if (current.correct === choiceId) setScore(s => s + 1);
 
       if (tRef.current) clearTimeout(tRef.current);
       tRef.current = setTimeout(() => {
-        const isLast = idx >= QUESTIONS_PER_LEVEL - 1;
+        const isLast = idx >= QUESTIONS_PER_ROUND - 1;
 
         setSelected(null);
         setLocked(false);
@@ -377,48 +369,20 @@ export default function QuizScreen({ navigation }: any) {
     [current, locked, idx, runQuestionAnim]
   );
 
-  const onNextRound = useCallback(async () => {
-    const nextLevel = Math.min(level + 1, LEVELS_TOTAL);
+  const onRetry = useCallback(() => startRound(), [startRound]);
 
-    const nextBest = Math.max(best, nextLevel);
-    if (nextBest !== best) {
-      setBest(nextBest);
-      await AsyncStorage.setItem(STORAGE_BEST, String(nextBest));
-    }
+  const qTranslate = appearQ.interpolate({ inputRange: [0, 1], outputRange: [12, 0] });
+  const aTranslate = appearA.interpolate({ inputRange: [0, 1], outputRange: [14, 0] });
 
-    if (level >= LEVELS_TOTAL) {
-      setPhase('intro');
-      return;
-    }
-
-    startLevel(nextLevel);
-  }, [best, level, startLevel]);
-
-  const onRetry = useCallback(() => startLevel(level), [level, startLevel]);
-  const padH = isTiny ? 14 : isSmall ? 16 : 20;
-
-  const topTitleSize = isTiny ? 12.5 : isSmall ? 13 : 14;
-
-  const qTextSize = isTiny ? 14 : isSmall ? 15 : 17;
-  const qLine = isTiny ? 20 : isSmall ? 22 : 26;
-
-  const btnH = isTiny ? 42 : isSmall ? 46 : 52;
-  const btnR = isTiny ? 14 : isSmall ? 16 : 20;
-
-  const cardR = isTiny ? 20 : isSmall ? 22 : 26;
-  const cardPad = isTiny ? 14 : isSmall ? 16 : 20;
-
-  const gridGap = isTiny ? 8 : 10;
-  const cellSize = isTiny ? 38 : isSmall ? 42 : 44;
-  const cellRadius = isTiny ? 14 : 16;
-
-  const mainMinW = isTiny ? 200 : isSmall ? 210 : 220;
-
-  const progress = useMemo(() => `${idx + 1}/${QUESTIONS_PER_LEVEL}`, [idx]);
+  const introQuote =
+    '“Knowledge is not what you store — it is what you become. Each question is a small door. Open it honestly, and you’ll see more than you expected.”';
 
   if (phase === 'intro') {
     return (
       <ImageBackground source={BG} style={styles.bg} resizeMode="cover">
+        <View pointerEvents="none" style={styles.overlayTop} />
+        <View pointerEvents="none" style={styles.overlayCenter} />
+
         <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
           <View style={[styles.topBar, { paddingTop: Math.max(8, insets.top ? 6 : 8) }]}>
             <Pressable onPress={() => navigation?.goBack?.()} style={styles.backBtn} hitSlop={10}>
@@ -429,105 +393,32 @@ export default function QuizScreen({ navigation }: any) {
           </View>
 
           <View style={[styles.center, { paddingHorizontal: padH }]}>
-            <Text style={[styles.menuTitle, { fontSize: isTiny ? 18 : isSmall ? 20 : 24 }]}>
-              QUIZ
-            </Text>
-
-            <Text
-              style={[
-                styles.menuSub,
-                {
-                  fontSize: isTiny ? 12 : isSmall ? 12.5 : 13.5,
-                  lineHeight: isTiny ? 17 : isSmall ? 18 : 20,
-                  paddingHorizontal: isTiny ? 4 : 10,
-                },
-              ]}
-            >
-              10 questions per round. Pass if you get {PASS_THRESHOLD}+ correct.
-            </Text>
-
-            <View style={{ height: isTiny ? 10 : 14 }} />
-
-            <View style={[styles.infoRow, { gap: isTiny ? 8 : 10 }]}>
-              <View
+            <View style={[styles.quoteCard, { transform: [{ translateY: -30 }] }]}>
+              <Text
                 style={[
-                  styles.infoPill,
-                  { minWidth: isTiny ? 84 : 92, paddingVertical: isTiny ? 8 : 10 },
+                  styles.quoteText,
+                  {
+                    fontSize: isTiny ? 12.5 : isSmall ? 13.5 : 14.5,
+                    lineHeight: isTiny ? 18 : isSmall ? 20 : 22,
+                  },
                 ]}
               >
-                <Text style={[styles.infoLabel, { fontSize: isTiny ? 10 : 11 }]}>Level</Text>
-                <Text style={[styles.infoValue, { fontSize: isTiny ? 13 : 14 }]}>
-                  {level}/{LEVELS_TOTAL}
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.infoPill,
-                  { minWidth: isTiny ? 84 : 92, paddingVertical: isTiny ? 8 : 10 },
-                ]}
-              >
-                <Text style={[styles.infoLabel, { fontSize: isTiny ? 10 : 11 }]}>Unlocked</Text>
-                <Text style={[styles.infoValue, { fontSize: isTiny ? 13 : 14 }]}>
-                  {best}/{LEVELS_TOTAL}
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.infoPill,
-                  { minWidth: isTiny ? 84 : 92, paddingVertical: isTiny ? 8 : 10 },
-                ]}
-              >
-                <Text style={[styles.infoLabel, { fontSize: isTiny ? 10 : 11 }]}>Questions</Text>
-                <Text style={[styles.infoValue, { fontSize: isTiny ? 13 : 14 }]}>
-                  {QUESTIONS_PER_LEVEL}
-                </Text>
-              </View>
+                {introQuote}
+              </Text>
+
+              <Text style={[styles.quoteSub, { fontSize: isTiny ? 11 : 12 }]}>
+                10 questions • pass with 7+ correct
+              </Text>
             </View>
 
-            <View style={{ height: isTiny ? 12 : 18 }} />
-
-            <View style={[styles.levelGrid, { gap: gridGap }]}>
-              {Array.from({ length: LEVELS_TOTAL }).map((_, i) => {
-                const lv = i + 1;
-                const unlocked = lv <= best;
-                const activeLv = lv === level;
-
-                return (
-                  <Pressable
-                    key={lv}
-                    onPress={() => unlocked && startLevel(lv)}
-                    style={[
-                      styles.levelCell,
-                      {
-                        width: cellSize,
-                        height: cellSize,
-                        borderRadius: cellRadius,
-                      },
-                      activeLv && styles.levelCellActive,
-                      !unlocked && styles.levelCellLocked,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.levelText,
-                        { fontSize: isTiny ? 13 : 14 },
-                        !unlocked && styles.levelTextLocked,
-                      ]}
-                    >
-                      {lv}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            <View style={{ height: isTiny ? 12 : 18 }} />
+            <View style={{ height: isTiny ? 16 : 22 }} />
 
             <Pressable
               style={[styles.mainBtn, { height: btnH, borderRadius: btnR, minWidth: mainMinW }]}
-              onPress={() => startLevel(level)}
+              onPress={startRound}
+              android_ripple={{ color: 'rgba(0,0,0,0.08)' }}
             >
-              <Text style={[styles.mainBtnText, { fontSize: isTiny ? 13 : 14 }]}>START</Text>
+              <Text style={[styles.mainBtnText, { fontSize: isTiny ? 14 : 15 }]}>START</Text>
             </Pressable>
 
             <View style={{ height: Math.max(16, insets.bottom + 10) }} />
@@ -540,17 +431,20 @@ export default function QuizScreen({ navigation }: any) {
   if (phase === 'result') {
     return (
       <ImageBackground source={BG2} style={styles.bg} resizeMode="cover">
+        <View pointerEvents="none" style={styles.overlayTop} />
+        <View pointerEvents="none" style={styles.overlayCenter} />
+
         <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
           <View style={{ height: Math.max(8, insets.top ? 6 : 8) }} />
 
           <View style={[styles.resultCenter, { paddingHorizontal: padH }]}>
-            <View style={[styles.resultCard, { borderRadius: cardR, padding: cardPad }]}>
+            <View style={[styles.resultCard, { borderRadius: isTiny ? 20 : 24, padding: isTiny ? 14 : 18 }]}>
               <Text style={[styles.resultTitle, { fontSize: isTiny ? 16 : isSmall ? 18 : 22 }]}>
                 {passed ? 'ROUND COMPLETE' : 'ROUND FAILED'}
               </Text>
 
               <Text style={[styles.resultScore, { fontSize: isTiny ? 13 : 15, marginTop: 10 }]}>
-                Correct answers: {score}/{QUESTIONS_PER_LEVEL}
+                Correct answers: {score}/{QUESTIONS_PER_ROUND}
               </Text>
 
               <Text
@@ -563,41 +457,28 @@ export default function QuizScreen({ navigation }: any) {
                   },
                 ]}
               >
-                {passed ? `You passed. Next round is available.` : `You need at least ${PASS_THRESHOLD} correct to pass.`}
+                {passed ? 'You passed. Want another round?' : `You need at least ${PASS_THRESHOLD} correct to pass.`}
               </Text>
 
               <View style={{ height: 14 }} />
 
-              {passed ? (
-                <Pressable
-                  style={[styles.mainBtn, { height: btnH, borderRadius: btnR, minWidth: mainMinW }]}
-                  onPress={onNextRound}
-                >
-                  <Text style={[styles.mainBtnText, { fontSize: isTiny ? 13 : 14 }]}>
-                    {level >= LEVELS_TOTAL ? 'FINISH' : 'NEXT ROUND'}
-                  </Text>
-                </Pressable>
-              ) : (
-                <Pressable
-                  style={[styles.mainBtn, { height: btnH, borderRadius: btnR, minWidth: mainMinW }]}
-                  onPress={onRetry}
-                >
-                  <Text style={[styles.mainBtnText, { fontSize: isTiny ? 13 : 14 }]}>PLAY AGAIN</Text>
-                </Pressable>
-              )}
+              <Pressable
+                style={[styles.mainBtn, { height: btnH, borderRadius: btnR, minWidth: mainMinW }]}
+                onPress={onRetry}
+                android_ripple={{ color: 'rgba(0,0,0,0.08)' }}
+              >
+                <Text style={[styles.mainBtnText, { fontSize: isTiny ? 14 : 15 }]}>PLAY AGAIN</Text>
+              </Pressable>
 
               <View style={{ height: 10 }} />
 
               <Pressable
                 style={[styles.menuBtn, { height: btnH, borderRadius: btnR, minWidth: mainMinW }]}
                 onPress={toMenu}
+                android_ripple={{ color: 'rgba(255,180,94,0.10)' }}
               >
-                <Text style={[styles.menuBtnText, { fontSize: isTiny ? 13 : 14 }]}>MENU</Text>
+                <Text style={[styles.menuBtnText, { fontSize: isTiny ? 14 : 15 }]}>MENU</Text>
               </Pressable>
-
-              <Text style={[styles.levelLine, { marginTop: isTiny ? 10 : 12 }]}>
-                Level {level} • Best {best}/{LEVELS_TOTAL}
-              </Text>
             </View>
           </View>
 
@@ -607,11 +488,11 @@ export default function QuizScreen({ navigation }: any) {
     );
   }
 
-  const qTranslate = appearQ.interpolate({ inputRange: [0, 1], outputRange: [12, 0] });
-  const aTranslate = appearA.interpolate({ inputRange: [0, 1], outputRange: [14, 0] });
-
   return (
     <ImageBackground source={BG} style={styles.bg} resizeMode="cover">
+      <View pointerEvents="none" style={styles.overlayTop} />
+      <View pointerEvents="none" style={styles.overlayCenter} />
+
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <View style={[styles.topBar, { paddingTop: Math.max(8, insets.top ? 6 : 8) }]}>
           <Pressable onPress={toMenu} style={styles.backBtn} hitSlop={10}>
@@ -633,7 +514,7 @@ export default function QuizScreen({ navigation }: any) {
           <Animated.View style={{ opacity: appearA, transform: [{ translateY: aTranslate }], width: '100%' }}>
             {current?.choices.map(c => {
               const picked = selected === c.id;
-              const correct = c.id === current.correct;
+              const correct = c.id === current?.correct;
 
               const base: any[] = [
                 styles.answerBtn,
@@ -649,7 +530,13 @@ export default function QuizScreen({ navigation }: any) {
               if (locked && picked && !correct) base.push(styles.answerWrong);
 
               return (
-                <Pressable key={c.id} style={base} onPress={() => onChoose(c.id)} disabled={locked}>
+                <Pressable
+                  key={c.id}
+                  style={base}
+                  onPress={() => onChoose(c.id)}
+                  disabled={locked}
+                  android_ripple={{ color: 'rgba(0,0,0,0.10)' }}
+                >
                   <Text style={[styles.answerText, { fontSize: isTiny ? 13 : 14.2 }]}>{c.text}</Text>
                 </Pressable>
               );
@@ -659,7 +546,7 @@ export default function QuizScreen({ navigation }: any) {
           <View style={{ height: 10 }} />
 
           <Text style={[styles.helperLine, { fontSize: isTiny ? 11.2 : 12 }]}>
-            Score: {score}/{QUESTIONS_PER_LEVEL} • Need {PASS_THRESHOLD}
+            Score: {score}/{QUESTIONS_PER_ROUND} • Need {PASS_THRESHOLD}
           </Text>
         </View>
 
@@ -672,6 +559,24 @@ export default function QuizScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   bg: { flex: 1 },
   safe: { flex: 1 },
+
+  overlayTop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 220,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  overlayCenter: {
+    position: 'absolute',
+    top: 200,
+    left: 0,
+    right: 0,
+    height: 420,
+    backgroundColor: 'rgba(0,0,0,0.18)',
+  },
+
   topBar: {
     paddingHorizontal: 14,
     paddingBottom: 6,
@@ -698,37 +603,29 @@ const styles = StyleSheet.create({
   },
 
   center: { flex: 1, justifyContent: 'center' },
-  menuTitle: { color: '#fff', fontWeight: '900', textAlign: 'center', marginBottom: 10 },
-  menuSub: { color: 'rgba(255,255,255,0.84)', fontWeight: '700', textAlign: 'center' },
 
-  infoRow: { flexDirection: 'row', justifyContent: 'center' },
-  infoPill: {
-    paddingHorizontal: 14,
-    borderRadius: 16,
-    backgroundColor: 'rgba(0,0,0,0.16)',
+  quoteCard: {
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: 460,
+    borderRadius: 22,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    backgroundColor: 'rgba(0,0,0,0.26)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.16)',
-    alignItems: 'center',
   },
-  infoLabel: { color: 'rgba(255,255,255,0.72)', fontWeight: '800' },
-  infoValue: { color: '#fff', fontWeight: '900', marginTop: 2 },
-
-  levelGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
+  quoteText: {
+    color: 'rgba(255,255,255,0.90)',
+    fontWeight: '800',
+    textAlign: 'center',
   },
-  levelCell: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.16)',
-    borderWidth: 2,
-    borderColor: 'rgba(255,180,94,0.9)',
+  quoteSub: {
+    marginTop: 10,
+    color: 'rgba(255,255,255,0.72)',
+    fontWeight: '800',
+    textAlign: 'center',
   },
-  levelCellActive: { backgroundColor: '#6e0c0c' },
-  levelCellLocked: { borderColor: 'rgba(255,255,255,0.14)', opacity: 0.6 },
-  levelText: { color: '#fff', fontWeight: '900' },
-  levelTextLocked: { color: 'rgba(255,255,255,0.7)' },
 
   mainBtn: {
     backgroundColor: '#FFB45E',
@@ -736,12 +633,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignSelf: 'center',
     paddingHorizontal: 18,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOpacity: 0.22,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 8 },
+      },
+      android: { elevation: 5 },
+    }),
   },
   mainBtnText: {
     color: '#0b0b0b',
     fontWeight: '900',
-    letterSpacing: 0.4,
+    letterSpacing: 0.6,
   },
+
   qCenterWrap: {
     flex: 1,
     justifyContent: 'center',
@@ -773,6 +680,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     ...Platform.select({ android: { paddingBottom: 1 } }),
   },
+
   resultCenter: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   resultCard: {
     width: '100%',
@@ -794,12 +702,5 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     paddingHorizontal: 18,
   },
-  menuBtnText: { color: '#fff', fontWeight: '900', letterSpacing: 0.4 },
-
-  levelLine: {
-    textAlign: 'center',
-    color: 'rgba(255,255,255,0.72)',
-    fontWeight: '800',
-    fontSize: 12,
-  },
+  menuBtnText: { color: '#fff', fontWeight: '900', letterSpacing: 0.6 },
 });

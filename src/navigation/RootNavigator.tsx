@@ -3,8 +3,8 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { RootStackParamList } from './types';
 
-import LoaderScreen from '../screens/LoaderScreen';
-import OnboardScreen from '../screens/OnboardScreen';
+import LoaderScreen from '../screens/LoagScreen';
+import OnboardScreen from '../screens/OnbortyScreen';
 import TabsNavigator from './TabsNavigator';
 import PlaceDetailScreen from '../screens/PlaceDetailScreen';
 
